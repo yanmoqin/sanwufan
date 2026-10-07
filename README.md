@@ -1,5 +1,7 @@
 # 三五反线上对战
 
+试玩下载：[Windows 便携试玩包](https://github.com/yanmoqin/sanwufan/releases/latest)。完整解压后双击启动文件，无需安装 Python。
+
 ## 项目目录
 
 `sanwufan/` 是游戏源码，`tests/` 是自动测试，`docs/` 保存完善版规则和远程试玩说明，`deploy/` 保存服务器部署配置，`scripts/` 保存发布包构建工具。Windows 启动文件保留在根目录。
