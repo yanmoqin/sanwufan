@@ -1,0 +1,26 @@
+{
+  "Python": {
+    "version": "3.13.16",
+    "source": "https://www.python.org/ftp/python/3.13.16/python-3.13.16-embed-amd64.zip",
+    "download_sha256": "97dae5274cc54867065e8d5a3226e48c35017ed332a0fdb0e27d5b5821961297",
+    "license": "runtime/python/LICENSE.txt"
+  },
+  "Waitress": {
+    "version": "3.0.2",
+    "source": "https://pypi.org/project/waitress/3.0.2/",
+    "license": "runtime/python/site-packages/WAITRESS-LICENSE.txt"
+  },
+  "websocket-client": {
+    "version": "1.9.2",
+    "source": "https://pypi.org/project/websocket-client/1.9.2/",
+    "license": "runtime/python/site-packages/websocket_client-1.9.2.dist-info/licenses/LICENSE"
+  },
+  "Tunnel": {
+    "provider": "Tunnelmole",
+    "documentation": "https://tunnelmole.com/",
+    "protocol_source": "https://github.com/robbie-cahill/tunnelmole-client",
+    "license": "runtime/TUNNELMOLE-LICENSE.md",
+    "client": "sanwufan.tunnel (Python adapter)",
+    "requires_account": false
+  }
+}

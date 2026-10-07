@@ -1,0 +1,70 @@
+name: sanwufan
+services:
+  data-init:
+    image: sanwufan:0.4.0
+    build: .
+    user: "0:0"
+    entrypoint: ["python", "-c", "import os; os.chown('/data', 10001, 10001)"]
+    volumes:
+      - game_data:/data
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    security_opt: [no-new-privileges:true]
+  app:
+    image: sanwufan:0.4.0
+    build: .
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8080"
+      DATABASE: /data/sanwufan.sqlite3
+      PUBLIC_ORIGIN: https://${DOMAIN:?请在.env填写DOMAIN}
+    volumes:
+      - game_data:/data
+    depends_on:
+      data-init:
+        condition: service_completed_successfully
+    networks: [backend]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+  caddy:
+    image: caddy:2.11.4-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?请在.env填写DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?请在.env填写ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    networks: [backend, edge]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+networks:
+  backend:
+    internal: true
+  edge: {}
+volumes:
+  game_data: {}
+  caddy_data: {}
+  caddy_config: {}

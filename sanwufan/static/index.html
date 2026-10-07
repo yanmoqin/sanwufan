@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0c302d">
+  <title>三五反 · 好友与练习牌桌</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="三五反牌桌首页"><span class="brand-mark">35</span><span>三五反<small>对家携手 · 一起上桌</small></span></a>
+    <nav aria-label="牌桌工具">
+      <span id="connection" class="connection">正在连接</span>
+      <button id="room-open" class="tool-button" hidden><span aria-hidden="true">♧</span> 房间</button>
+      <button id="history-open" class="tool-button" disabled><span aria-hidden="true">↶</span> 回看</button>
+      <button id="tools-open" class="tool-button"><span aria-hidden="true">☰</span> 菜单</button>
+    </nav>
+  </header>
+  <main class="page">
+    <section id="lobby" class="lobby" hidden aria-labelledby="lobby-title">
+      <p class="eyebrow">三五反 / 好友房</p><h1 id="lobby-title">凑齐四人，开一桌。</h1>
+      <p>对家搭档，一起打完整牌局。建房后，把房间号或邀请链接发给朋友。</p>
+      <label for="nickname">你的昵称</label><input id="nickname" maxlength="16" autocomplete="nickname" placeholder="怎么称呼你？">
+      <button id="create-room" class="primary-button">创建好友房</button>
+      <div class="join-room"><label for="room-code">已有房间？</label><input id="room-code" inputmode="numeric" maxlength="6" placeholder="六位房间号"><button id="join-room" class="secondary-button">加入房间</button></div>
+      <details class="recovery"><summary>恢复之前的座位</summary><p>网址变了或换了浏览器？输入你之前保存的个人恢复码。</p><input id="recover-input" maxlength="24" autocomplete="off" aria-label="个人恢复码" placeholder="粘贴你的个人恢复码"><button id="recover-seat" class="secondary-button">恢复座位</button></details>
+      <p id="lobby-feedback" role="alert"></p><p class="lobby-note">朋友需打开同一台服务的地址。同一浏览器的标签页共享身份；四人请使用各自的设备或独立浏览器会话。</p>
+    </section>
+
+    <div class="game-layout" id="game-layout">
+      <section class="table-column" aria-label="三五反牌桌">
+        <div class="table" id="table">
+          <div class="table-line" aria-hidden="true"></div>
+          <div class="table-head">
+            <div class="table-toolbar"><span id="deal-label">准备开局</span><span id="trump-label" class="trump-pill">主花色待定</span><span id="phase-label" class="stage-pill">等待准备</span></div>
+            <div class="table-hud">
+              <section class="bottom-panel" id="bottom-panel" hidden aria-label="庄家公开的底牌"><h2>公开底牌</h2><div id="bottom-cards" class="bottom-cards"></div></section>
+              <button class="score-panel" id="score-open" aria-label="查看两队得分详情"><span class="score-team"><small>我方 <b id="our-role"></b></small><strong id="our-score">0</strong></span><span class="score-vs">VS</span><span class="score-team opponent"><small>对方 <b id="their-role"></b></small><strong id="their-score">0</strong></span></button>
+            </div>
+          </div>
+          <div class="playfield" id="playfield">
+            <div class="felt-label" aria-hidden="true"><span>三五反</span><small>♠ · ♥ · ♣ · ♦</small></div>
+            <article class="seat seat-top" id="seat-2" aria-label="你的搭档"></article>
+            <article class="seat seat-right" id="seat-1" aria-label="下家"></article>
+            <article class="seat seat-left" id="seat-3" aria-label="上家"></article>
+            <div class="play-zone play-top" id="play-2"></div>
+            <div class="play-zone play-right" id="play-1"></div>
+            <div class="play-zone play-left" id="play-3"></div>
+            <div class="play-zone play-bottom" id="play-0"></div>
+            <div id="table-center" class="table-center"></div>
+          </div>
+          <section class="hand-panel" aria-label="你的手牌与操作">
+            <div class="hand-heading"><article class="seat seat-bottom" id="seat-0" aria-label="你的座位"></article><h2>手牌 <span id="hand-count">0张</span></h2><button id="special-open" class="special-open" disabled>特殊牌</button><button id="auto" class="secondary-button" disabled>托管本局</button></div>
+            <div class="action-info"><p id="instruction" aria-live="polite">连接牌桌后，准备开始。</p><span id="selection-count">未选牌</span></div>
+            <div class="action-row">
+              <div class="selection-tools"><button id="hint" class="secondary-button" disabled>提示</button><button id="clear" class="text-button" disabled>清空</button><label id="kind-wrap" hidden>领出类型<select id="kind"><option value="">自动判断</option><option value="true_gang">真杠</option><option value="false_gang">假杠</option></select></label></div>
+              <div id="actions" class="main-actions"></div>
+            </div>
+            <div id="hand" class="hand" aria-label="手牌" data-empty="准备好后，手牌会发到这里。"></div>
+            <div id="feedback" role="alert" class="feedback" hidden></div>
+          </section>
+        </div>
+      </section>
+    </div>
+    <footer>四人 · 一副牌 · 共100分 <span>单人练习</span></footer>
+  </main>
+  <dialog id="tools-dialog" aria-labelledby="tools-title">
+    <div class="dialog-heading"><p class="eyebrow">牌桌工具</p><button class="text-button" data-close="tools-dialog" aria-label="关闭菜单">关闭 ×</button></div><h2 id="tools-title">桌上见</h2>
+    <div class="tool-grid"><button id="rules-open" class="secondary-button">玩法速览</button><button id="events-open" class="secondary-button">牌局动态</button><a class="secondary-button" id="mode-link" href="/friends">四人好友房</a><button id="fullscreen" class="secondary-button">进入全屏</button><button id="auto-menu" class="secondary-button" disabled>托管本局</button><button id="reset" class="secondary-button">重新开桌</button></div>
+    <p>点牌选中，再点“出牌”。金色边框表示已选牌；牌面右上角标注主牌、反牌和贡牌。</p><p>手机横屏能看到更宽的牌桌；竖屏也可以直接打牌。</p>
+  </dialog>
+  <dialog id="room-dialog" aria-labelledby="room-dialog-title">
+    <div class="dialog-heading"><p class="eyebrow">和朋友一起</p><button class="text-button" data-close="room-dialog" aria-label="关闭房间信息">关闭 ×</button></div><h2 id="room-dialog-title">房间与邀请</h2>
+    <section id="room-bar" class="room-bar" hidden aria-label="好友房信息">
+      <strong id="room-title"></strong><input id="invite-link" readonly aria-label="房间邀请链接"><button id="copy-invite" class="secondary-button">复制邀请</button><button id="leave-room" class="text-button">离开房间</button><p>对面是你的搭档。开局前可换到空座；断线后用原浏览器回来即可继续。</p>
+      <details class="recovery"><summary>保存我的恢复码</summary><p>换网址后可恢复座位与手牌。只给自己保存，别人拿到就能接管你的座位。恢复成功后，请保存新的码。</p><input id="recovery-code" readonly aria-label="我的个人恢复码"><button id="copy-recovery" class="secondary-button">复制我的恢复码</button></details>
+    </section>
+
+    <p id="room-feedback" role="status" hidden></p>
+  </dialog>
+  <dialog id="score-dialog" aria-labelledby="score-title">
+    <div class="dialog-heading"><p class="eyebrow">这一局的分数</p><button class="text-button" data-close="score-dialog" aria-label="关闭得分详情">关闭 ×</button></div><h2 id="score-title">对家一起争分</h2>
+    <div class="score-details"><div><small>我方 · <span id="our-names"></span></small><strong id="score-detail-ours">0</strong></div><div><small>对方 · <span id="their-names"></span></small><strong id="score-detail-theirs">0</strong></div></div>
+    <div class="score-track" aria-hidden="true"><span id="score-fill"></span></div><p id="score-note">闲家40分起换庄，60分起有进贡。</p>
+  </dialog>
+  <dialog id="events-dialog" aria-labelledby="events-title">
+    <div class="dialog-heading"><p class="eyebrow">牌局动态</p><button class="text-button" data-close="events-dialog" aria-label="关闭牌局动态">关闭 ×</button></div><h2 id="events-title">这一桌的动态</h2><ol id="events" class="events"><li>正在入座…</li></ol>
+  </dialog>
+  <dialog id="special-dialog" aria-labelledby="special-title">
+    <div class="dialog-heading"><p class="eyebrow">只有你能看到</p><button class="text-button" data-close="special-dialog" aria-label="关闭特殊牌提示">关闭 ×</button></div><h2 id="special-title">你的特殊牌</h2><div id="hand-hints" class="hand-hints" aria-label="我的特殊牌提示"></div><p>点杠提示只会选中这组牌，再由你决定是否出牌。四张3或5可以选择怎么亮，也可以保留真杠。</p>
+  </dialog>
+  <dialog id="rules-dialog" aria-labelledby="rules-title">
+    <div class="dialog-heading"><p class="eyebrow">上桌之前</p><button id="rules-close" class="text-button" aria-label="关闭玩法速览">关闭 ×</button></div>
+    <h2 id="rules-title">三五反，怎么打？</h2>
+    <p>四人一副牌，对家搭档。每人12张，留6张底牌；5计5分，10和K各计10分，全局共100分。</p>
+    <ol class="rule-flow"><li><b>发牌与亮牌</b>发牌时先亮有效2者定主花色，首局同时定庄。亮主后立即发完剩余手牌。三张3或三张5可亮三反、五反，只有亮出的三张牌升级为反。</li><li><b>先贡，再拿底</b>先完成进贡还贡，庄家再拿6张底牌。贡最大主牌，还不带分的主牌；已亮出的三反牌不能还贡，无合法还贡牌则全部免贡。</li><li><b>扣底与出牌</b>庄家拿底所得的3、5可以组成反；四张时自行选择亮哪三张。亮反截止于扣牌提交前，确认继续后仍可补亮。庄家扣6张，不能扣任何5、10、K，扣下后向全桌公开。庄家首出，之后每轮赢家领出；有应跟的牌就必须先跟足。</li><li><b>分数决定下局</b>闲家不到40分原庄继续坐；40分起换庄，60分起原庄进贡，80分起双贡；闲家0分也双贡。</li></ol>
+    <p class="rule-small">主牌从大到小：方片5 ＞ 五反 ＞ 三反 ＞ 大王 ＞ 小王 ＞ 黑桃Q ＞ 主J ＞ 副J ＞ 主2 ＞ 副2 ＞ 普通主牌。同组三反或五反先出者大；四张中保留未亮的3按普通3使用。</p>
+    <p class="rule-small">四张同点数可组成真杠；黑桃Q加三张同点数可组成假杠。真杠先跟主、假杠先跟副，不足再补其他牌。四张Q领出要明确选择真杠或假杠。贡牌交换取得的牌不能组成杠或三五反。</p>
+    <button id="rules-done" class="primary-button">知道了，回牌桌</button>
+  </dialog>
+  <dialog id="history-dialog" aria-labelledby="history-title">
+    <div class="dialog-heading"><p class="eyebrow">本局已结束的轮次</p><button id="history-close" class="text-button">关闭回看 ×</button></div>
+    <h2 id="history-title">回看出牌</h2><p>每行一轮，从上到下按轮次排列；四家的牌按实际出牌顺序展示。</p>
+    <p id="history-result" aria-live="polite"></p><div id="history-plays"></div>
+  </dialog>
+  <dialog id="player-dialog" aria-labelledby="player-title">
+    <div class="dialog-heading"><p class="eyebrow">牌友互动</p><button id="player-close" class="text-button">关闭 ×</button></div><h2 id="player-title"></h2>
+    <div class="emote-options"><button data-emote="egg" class="secondary-button">🥚 扔鸡蛋</button><button data-emote="tomato" class="secondary-button">🍅 扔西红柿</button><button data-emote="flower" class="secondary-button">🌸 送花</button><button data-emote="clap" class="secondary-button">👏 鼓掌</button></div>
+    <p>每次互动间隔3秒。互动不影响出牌与分数。</p><label class="motion-option"><input type="checkbox" id="mute-emotes"> 关闭互动动画</label>
+    <div id="player-management" class="player-management" hidden><button id="kick-player" class="text-button">请离这位玩家</button><p id="kick-tip"></p><div id="kick-confirm" hidden><p id="kick-question"></p><button id="confirm-kick" class="primary-button">确认请离</button><button id="cancel-kick" class="text-button">取消</button></div></div>
+  </dialog>
+
+  <p id="social-status" class="sr-only" aria-live="polite"></p>
+</body>
+</html>

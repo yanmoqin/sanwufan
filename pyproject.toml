@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sanwufan"
+version = "0.6.3"
+description = "三五反规则引擎、四人好友房与网页练习牌桌"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+server = ["waitress==3.0.2"]
+
+[tool.setuptools.packages.find]
+include = ["sanwufan*"]
+
+[tool.setuptools.package-data]
+sanwufan = ["static/*.html", "static/*.css", "static/*.js"]

@@ -1,0 +1,7 @@
+*
+!Dockerfile
+!requirements-server.txt
+!sanwufan/
+!sanwufan/**
+**/__pycache__
+**/*.pyc
