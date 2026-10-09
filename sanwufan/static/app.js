@@ -12,7 +12,8 @@ document.body.classList.toggle('friend-mode',friends);
 document.querySelector('.brand').href=friends?'/friends':'/';
 let requestEpoch = 0;
 let specialKey = '', socialCursor = 0, playerTarget = null;
-let historyKey = '';
+LABELS.revolution = '革命重开';
+let historyKey = '', chatKey = '', chatRoom = '', chatCursor = 0, chatUnread = 0, chatSending = false;
 const EMOTES = {egg:'🥚',tomato:'🍅',flower:'🌸',clap:'👏'};
 const EMOTE_LABELS = {egg:'扔鸡蛋',tomato:'扔西红柿',flower:'送花',clap:'鼓掌'};
 try {$('mute-emotes').checked=localStorage.getItem('sanwufan-mute-emotes')==='1';} catch {}
@@ -57,7 +58,7 @@ function fitHand(){
   const hand=$('hand'),n=hand.children.length;
   if(!n||hand.clientWidth<=0||getComputedStyle(hand).display==='grid')return;
   const width=hand.children[0].getBoundingClientRect().width;
-  const gap=n>1?Math.min(8,(hand.clientWidth-8-width*n)/(n-1)):0;
+  const gap=n>1?Math.max(Math.max(24,width/2+2)-width,Math.min(8,(hand.clientWidth-8-width*n)/(n-1))):0;
   hand.style.setProperty('--hand-gap',`${gap}px`);
 }
 new ResizeObserver(fitHand).observe($('hand'));
@@ -71,6 +72,7 @@ function accept(next) {
     $('lobby').hidden=!lobby;$('game-layout').hidden=lobby;$('room-bar').hidden=lobby;
     document.body.classList.toggle('lobby-mode',lobby);
     $('room-open').hidden=lobby;
+    $('chat-open').hidden=lobby;
     $('auto').hidden=$('auto-menu').hidden=true;
     $('reset').hidden=lobby || !next.is_owner;
     document.querySelector('footer span').textContent='四人好友房';
@@ -83,6 +85,7 @@ function accept(next) {
   }
   const sameTable=state && state.table_id===next.table_id;
   if (sameTable && next.version < state.version) return;
+  if(state?.room_code===next.room_code && (next.chat_sequence||0)<(state.chat_sequence||0))next={...next,chat_sequence:state.chat_sequence,chat_messages:state.chat_messages};
   const changed = !sameTable || state.version !== next.version;
   if(!sameTable || state.player_seat!==next.player_seat) {selected.clear();handKey=eventsKey=playKey=actionKey=specialKey='';$('kind').value='';socialCursor=next.social_sequence||0;}
   state = next; connection(true);document.body.classList.add('in-room');document.body.dataset.phase=state.phase;
@@ -91,7 +94,7 @@ function accept(next) {
     if (state.auto) selected.clear();
     render();
   }
-  renderSocial();
+  renderSocial();renderChat();
 }
 async function poll() {
   if (polling) return;
@@ -140,12 +143,13 @@ function instruction() {
   return '本局结束。点击“下一局”，由结算决定下局庄家和进贡，再重新准备。';
 }
 function renderSeats() {
+  const played=new Set([...(state.trick_history||[]).flatMap(t=>t.plays.flatMap(p=>p.cards)),...state.current_plays.flatMap(p=>p.cards)]);
   for (const p of state.players) {
     const position=relativeSeat(p.seat);
     const seat = $(`seat-${position}`);
     const active = state.phase === 'playing' && state.next_seat === p.seat;
     const reveals=(state.reflections||[]).filter(r=>r.seat===p.seat);
-    const key=JSON.stringify([p,active,state.phase,state.dealer,state.hand_counts[p.seat],state.ready_seats.includes(p.seat),state.confirmed_seats.includes(p.seat),reveals]);
+    const key=JSON.stringify([p,active,state.phase,state.dealer,state.hand_counts[p.seat],state.ready_seats.includes(p.seat),state.confirmed_seats.includes(p.seat),reveals,[...played],state.bottom_cards]);
     if(seat.dataset.renderKey===key)continue;seat.dataset.renderKey=key;seat.replaceChildren();
     seat.className = `seat seat-${['bottom','right','top','left'][position]}${p.seat%2!==ourTeam()?' enemy':''}${p.seat===me()?' myself':''}${active?' active':''}`;
     seat.setAttribute('aria-label',`${p.seat+1}号座位，${p.name}${p.seat===me()?'，你':position===2?'，你的搭档':''}`);
@@ -162,15 +166,23 @@ function renderSeats() {
     if (active) meta.prepend(element('span','turn-pip'));
     if (p.seat !== me() && state.hand_counts[p.seat] > 0 && state.phase !== 'declaring') meta.append(element('span','cardback'));
     const interact=(!friends||p.occupied)&&p.seat!==me();
-    const avatar=element(interact?'button':'div',`avatar${interact?' interaction-avatar':''}`,p.name.slice(-1));
+    const avatar=element(interact?'button':'div',`avatar${interact?' interaction-avatar':''}`,Array.from(p.name)[0]||'?');
     if(interact){avatar.type='button';avatar.title=`与${p.name}互动`;avatar.setAttribute('aria-label',`与${p.name}互动`);avatar.addEventListener('click',()=>openPlayer(p.seat));}
     info.append(title,meta); seat.append(avatar,info);
     if(reveals.length){
       const badges=element('div','seat-reflections');
       for(const r of reveals){
         const label=r.cards[0].split(':')[1]==='3'?'三反':'五反';
-        const badge=element('span','reflection-badge',label);
-        badge.append(element('small','',r.cards.map(id=>{const [s,n]=id.split(':');return SUITS[s]+n;}).join(' ')));
+        const badge=element('div','reflection-badge'),faces=element('div','reflection-faces');
+        badge.append(element('small','reflection-label',label));
+        for(const id of r.cards){
+          const face=cardNode(id,true),used=played.has(id),buried=state.bottom_cards.includes(id);
+          face.classList.add('reflection-card');face.classList.toggle('reflection-used',used||buried);
+          face.dataset.card=id;face.dataset.used=String(used||buried);
+          face.title=cardLabel(id)+(used?' · 已出':buried?' · 已扣底':' · 未出');
+          face.setAttribute('aria-label',face.title);faces.append(face);
+        }
+        badge.append(faces);
         badge.setAttribute('aria-label',`已亮${label}：${r.cards.map(cardLabel).join('、')}`);
         badges.append(badge);
       }
@@ -217,7 +229,7 @@ function renderHand() {
   const nextKey=JSON.stringify(state.hand_details);
   if(nextKey!==handKey) {
     const focused=document.activeElement?.dataset.card;handKey=nextKey;
-    $('hand').replaceChildren(...state.hand_details.map(d=>cardNode(d.id,false,d,true)));
+    $('hand').replaceChildren(...state.hand_details.map((d,i)=>{const node=cardNode(d.id,false,d,true);node.style.zIndex=i;return node;}));
     if(focused) [...$('hand').children].find(n=>n.dataset.card===focused)?.focus({preventScroll:true});
   }
   $('hand-count').textContent=`${state.hand.length}张`;
@@ -267,7 +279,7 @@ function renderActions() {
   if(key!==actionKey) {
     actionKey=key;const focused=document.activeElement?.dataset.action;
     $('actions').replaceChildren(...actions.map((a,i)=>{
-      const node=element('button',['reveal','change_seat','unready'].includes(a)?'secondary-button':'primary-button',LABELS[a]);node.type='button';node.dataset.action=a;node.addEventListener('click',()=>action(a));return node;
+      const node=element('button',['reveal','change_seat','unready','revolution'].includes(a)?'secondary-button':'primary-button',LABELS[a]);node.type='button';node.dataset.action=a;node.addEventListener('click',()=>a==='revolution'?showDialog('revolution-dialog'):action(a));return node;
     }));
     if(focused) [...$('actions').children].find(n=>n.dataset.action===focused)?.focus({preventScroll:true});
   }
@@ -276,6 +288,7 @@ function renderActions() {
 function render() {
   $('deal-label').textContent=state.phase==='waiting'?(state.deal_number?`第 ${String(state.deal_number+1).padStart(2,'0')} 局 · 待开局`:`准备开局 · ${friends?'好友房':'练习桌'}`):`第 ${String(state.deal_number).padStart(2,'0')} 局 · ${friends?'好友房':'练习桌'}`;
   $('trump-label').textContent=state.trump_suit?`${SUITS[state.trump_suit]} ${SUIT_NAMES[state.trump_suit]}为主`:'主花色待定';
+  if(state.trump_suit&&state.caller!==null)$('trump-label').append(element('small','trump-caller',`${name(state.caller)}${state.called_two?'亮2':'抽底'}定主`));
   $('phase-label').textContent=state.phase==='playing'?`第${state.trick_count+1}轮${state.current_lead?' · '+KINDS[state.current_lead.kind]:''}`:PHASES[state.phase];
   $('our-score').textContent=state.team_points[ourTeam()];$('their-score').textContent=state.team_points[1-ourTeam()];
   $('score-detail-ours').textContent=state.team_points[ourTeam()];$('score-detail-theirs').textContent=state.team_points[1-ourTeam()];
@@ -325,6 +338,39 @@ async function roomCommand(command, extra={}) {
   } catch { $('lobby-feedback').textContent='连接中断，请恢复后查看当前房间。';connection(false); }
   finally {busy=false;$('create-room').disabled=$('join-room').disabled=$('recover-seat').disabled=false;if(state){$('leave-room').disabled=!['waiting','settled'].includes(state.phase);renderSelection();}}
 }
+function renderChat(){
+  if(!friends||!state)return;
+  const messages=state.chat_messages||[];
+  if(chatRoom!==state.room_code){chatRoom=state.room_code;chatCursor=state.chat_sequence||0;chatUnread=0;chatKey='';}
+  const fresh=messages.filter(m=>m.id>chatCursor&&m.seat!==me());
+  if(!$('chat-dialog').open)chatUnread+=fresh.length;else chatUnread=0;
+  chatCursor=Math.max(chatCursor,state.chat_sequence||0);
+  $('chat-unread').hidden=!chatUnread;$('chat-unread').textContent=chatUnread>99?'99+':String(chatUnread);
+  $('chat-open').setAttribute('aria-label',`房间聊天${chatUnread?`，${chatUnread}条新消息`:''}`);
+  const key=JSON.stringify(messages);if(chatKey===key)return;chatKey=key;
+  const list=$('chat-messages'),atBottom=list.scrollHeight-list.scrollTop-list.clientHeight<40;
+  list.replaceChildren(...messages.map(m=>{
+    const row=element('li',m.seat===me()?'chat-own':''),heading=element('div','chat-heading');
+    heading.append(element('strong','',m.name),element('time','',new Date(m.at*1000).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})));
+    row.append(heading,element('p','chat-text',m.text));return row;
+  }));
+  if(!messages.length)list.append(element('li','chat-empty','同桌消息会显示在这里。'));
+  if(atBottom)list.scrollTop=list.scrollHeight;
+}
+$('chat-open').addEventListener('click',()=>{showDialog('chat-dialog');chatUnread=0;renderChat();$('chat-messages').scrollTop=$('chat-messages').scrollHeight;$('chat-input').focus();});
+$('chat-form').addEventListener('submit',async event=>{
+  event.preventDefault();if(!state||chatSending)return;
+  const text=$('chat-input').value.trim();if(!text)return;
+  const room=state.room_code;chatSending=true;$('chat-send').disabled=true;$('chat-feedback').textContent='';
+  try{
+    const response=await fetch(`${api}/action`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:'chat',text,room_code:room})});
+    const result=await response.json();
+    if(response.ok){accept(result);if(state?.room_code===room&&$('chat-input').value.trim()===text)$('chat-input').value='';$('chat-messages').scrollTop=$('chat-messages').scrollHeight;}
+    else $('chat-feedback').textContent=result.error?.message||'发送失败，请重试';
+  }catch{$('chat-feedback').textContent='连接中断，消息未确认发送，请稍后重试。';}
+  finally{chatSending=false;$('chat-send').disabled=false;}
+});
+$('confirm-revolution').addEventListener('click',()=>{$('revolution-dialog').close();action('revolution');});
 $('create-room').addEventListener('click',()=>roomCommand('create'));
 $('join-room').addEventListener('click',()=>roomCommand('join'));
 $('leave-room').addEventListener('click',()=>roomCommand('leave'));

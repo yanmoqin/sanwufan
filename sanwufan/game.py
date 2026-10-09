@@ -90,6 +90,7 @@ class Game:
     reflections: tuple[Reflection, ...] = ()
     stock: tuple[Card, ...] = ()
     dealt_count: int = 0
+    deal_start_seat: int = 0
     hands: tuple[tuple[Card, ...], ...] = EMPTY_HANDS
     bottom: tuple[Card, ...] = ()
     called_two: Card | None = None
@@ -121,6 +122,7 @@ class Game:
         """Check physical cards and points after every successfully accepted action."""
         if len(self.hands) != 4:
             raise RuleViolation("INVALID_STATE", "牌局必须包含四个座位")
+        validate_seat(self.deal_start_seat)
         active = tuple(c for p in self.trick.plays for c in p.cards) if self.trick else ()
         captured = tuple(c for t in self.tricks for c in t.cards)
         live = unique_cards(tuple(c for h in self.hands for c in h) + self.stock + self.bottom + active + captured)
@@ -163,7 +165,7 @@ class Game:
         self._require(Phase.DEALING)
         if self.dealt_count == 48:
             raise RuleViolation("DEAL_FINISHED", "48张手牌已经发完，请结束发牌阶段")
-        seat = self.dealt_count % 4
+        seat = (self.deal_start_seat + self.dealt_count) % 4
         hands = list(self.hands)
         hands[seat] += (self.stock[0],)
         count = self.dealt_count + 1
@@ -194,7 +196,8 @@ class Game:
         if self.options.first_no_trump != FirstNoTrump.REDEAL:
             raise RuleViolation("WRONG_FALLBACK", "本牌桌设置为首局随机定庄")
         blank = Game(options=self.options, revision=self.revision, number=self.number - 1,
-                     ready_seats=self.ready_seats, history=self.history)
+                     ready_seats=self.ready_seats, history=self.history,
+                     deal_start_seat=self.deal_start_seat)
         return blank.start_deal(order)
 
     def choose_first_dealer(self, seat: int | None = None) -> "Game":
@@ -220,7 +223,22 @@ class Game:
         if card.suit == Suit.JOKER:
             return self._change(last_draw=card, blackout=True)
         return self._change(last_draw=card, blackout=True, phase=Phase.DECLARING,
-                            context=RuleContext(card.suit, self.reflections))
+                            context=RuleContext(card.suit, self.reflections), caller=seat)
+
+    def can_revolution(self, seat: int) -> bool:
+        validate_seat(seat)
+        return (self.phase in (Phase.DEALING, Phase.FIRST_NO_TRUMP, Phase.DRAW_TRUMP,
+                               Phase.DECLARING, Phase.TRIBUTE_GIVE, Phase.TAKE_BOTTOM)
+                and self.dealt_count == 48 and not self.exchanges and not self.taken_bottom
+                and len(self.hands[seat]) == 12 and not any(c.points for c in self.hands[seat]))
+
+    def revolution(self, seat: int, order=None) -> "Game":
+        """A voluntary scoreless hand resets the match before any card exchange."""
+        if not self.can_revolution(seat):
+            raise RuleViolation("REVOLUTION_UNAVAILABLE", "发完12张手牌且没有5、10、K，进贡或拿底前才可革命")
+        first = self.dealer if self.dealer is not None else self.deal_start_seat
+        return Game(options=self.options, revision=self.revision,
+                    ready_seats=frozenset(range(4)), deal_start_seat=first).start_deal(order)
 
     def reflection_hand(self, seat: int) -> tuple[Card, ...]:
         """Own cards still available for specials, excluding staged transfers."""
@@ -400,7 +418,7 @@ class Game:
             "hand": [c.id for c in shown_hands[seat]], "hand_counts": [len(h) for h in shown_hands],
             "stock_count": len(self.stock), "bottom_count": len(self.bottom),
             "dealt_count": self.dealt_count,
-            "next_deal_seat": self.dealt_count % 4 if self.phase == Phase.DEALING and self.dealt_count < 48 else None,
+            "next_deal_seat": (self.deal_start_seat + self.dealt_count) % 4 if self.phase == Phase.DEALING and self.dealt_count < 48 else None,
             "bottom_cards": [c.id for c in self.bottom] if self.phase in (Phase.PLAYING, Phase.SETTLED) else [],
             "called_two": self.called_two.id if self.called_two else None, "caller": self.caller,
             "reflections": [{"seat": r.seat, "cards": [c.id for c in r.cards]} for r in self.reflections],

@@ -52,7 +52,7 @@ class HTTPApplication:
         headers = {k.lower(): v for k, v in headers.items()}
         path = urlsplit(target).path
         if method == "GET" and path == "/healthz":
-            health = {"status": "ok", "version": "1.0"}
+            health = {"status": "ok", "version": "1.1"}
             if hasattr(self.service, "local_launcher_id"):
                 health["local_launcher_id"] = self.service.local_launcher_id
             return self.response(200, health)

@@ -3,6 +3,7 @@ import secrets
 import hashlib
 import random
 import time
+import unicodedata
 from threading import RLock
 
 from .game import Game, Phase, REFLECTION_PHASES
@@ -25,6 +26,9 @@ class FriendRoom(PracticeRoom):
         self.social_sequence = 0
         self.social_events = []
         self.emote_last = {}
+        self.chat_sequence = 0
+        self.chat_messages = []
+        self.chat_last = {}
 
     def capture(self):
         with self.lock:
@@ -35,7 +39,9 @@ class FriendRoom(PracticeRoom):
                     "next_tick": self.next_tick, "fault": self.fault, "recovering": self.recovering,
                     "rng_state": self.rng.getstate() if self.rng else None,
                     "blocked": self.blocked, "social_sequence": self.social_sequence,
-                    "social_events": list(self.social_events), "emote_last": dict(self.emote_last)}
+                    "social_events": list(self.social_events), "emote_last": dict(self.emote_last),
+                    "chat_sequence": self.chat_sequence, "chat_messages": list(self.chat_messages),
+                    "chat_last": dict(self.chat_last)}
 
     def restore(self, data):
         with self.lock:
@@ -97,6 +103,23 @@ class FriendRoom(PracticeRoom):
             if target == source or self.members[target] is None:
                 raise RuleViolation("INVALID_TARGET", "请选择另一位已入座的玩家")
             self._social(source, target, item, token)
+
+    def chat(self, token, text):
+        with self.lock:
+            seat = self.seat_for(token)
+            if (not isinstance(text, str) or not 1 <= len(text) <= 200
+                    or any(unicodedata.category(c) == 'Cc' and not c.isspace() for c in text)):
+                raise RuleViolation("INVALID_CHAT", "聊天消息须为1至200字的文字")
+            text = ' '.join(text.split())
+            if not text:
+                raise RuleViolation("INVALID_CHAT", "请输入聊天内容")
+            now = time.time()
+            if now - self.chat_last.get(token, 0) < 1:
+                raise RuleViolation("CHAT_TOO_FAST", "发送太快，请稍等一秒")
+            self.chat_last[token] = now
+            self.chat_sequence += 1
+            self.chat_messages = (self.chat_messages + [{'id': self.chat_sequence, 'seat': seat,
+                                   'name': self.names[seat], 'text': text, 'at': now}])[-80:]
 
     def action_for(self, token, payload):
         with self.lock:
@@ -214,6 +237,8 @@ class FriendRoom(PracticeRoom):
             view.update(mode="friends", room_code=self.code, is_owner=token == self.owner, recovering=self.recovering,
                         can_kick=token == self.owner and self.game.phase in (Phase.WAITING, Phase.SETTLED),
                         social_sequence=self.social_sequence,
+                        chat_sequence=self.chat_sequence,
+                        chat_messages=[dict(m) for m in self.chat_messages],
                         social_events=[dict(e) for e in self.social_events if time.time() - e['at'] < 8],
                         players=[{"seat": s, "name": self.names[s], "bot": False, "occupant_id": self.occupant_id(s),
                                   "occupied": m is not None, "owner": m == self.owner and m is not None,
@@ -418,6 +443,16 @@ class FriendRooms:
                     room._log(f"{room.names[seat]}恢复了原来的座位。")
                 session.update(name=old["name"], room=old["room"], recovery_code=secrets.token_urlsafe(18))
                 del self.sessions[previous]
+                return self._state(token)
+            if command == 'chat':
+                if set(payload) != {'command', 'text', 'room_code'}:
+                    raise RuleViolation('INVALID_REQUEST', '聊天请求格式不正确')
+                if session['room'] not in self.rooms:
+                    raise RuleViolation('NOT_SEATED', '请先加入房间')
+                room = self.rooms[session['room']]
+                if payload['room_code'] != room.code:
+                    raise RuleViolation('STATE_CHANGED', '房间已变更，请重新发送')
+                room.chat(token, payload['text'])
                 return self._state(token)
             if command in ('kick', 'emote'):
                 expected = ({'command', 'target', 'target_id', 'version', 'table_id'} if command == 'kick' else

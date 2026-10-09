@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sanwufan"
-version = "1.0"
+version = "1.1"
 description = "三五反规则引擎、四人好友房与网页练习牌桌"
 requires-python = ">=3.10"
 dependencies = []

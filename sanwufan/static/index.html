@@ -14,6 +14,7 @@
     <nav aria-label="牌桌工具">
       <span id="connection" class="connection">正在连接</span>
       <button id="room-open" class="tool-button" hidden><span aria-hidden="true">♧</span> 房间</button>
+      <button id="chat-open" class="tool-button" hidden><span aria-hidden="true">☏</span> 聊天 <b id="chat-unread" hidden></b></button>
       <button id="history-open" class="tool-button" disabled><span aria-hidden="true">↶</span> 回看</button>
       <button id="tools-open" class="tool-button"><span aria-hidden="true">☰</span> 菜单</button>
     </nav>
@@ -66,6 +67,16 @@
     </div>
     <footer>四人 · 一副牌 · 共100分 <span>单人练习</span></footer>
   </main>
+  <dialog id="chat-dialog" aria-labelledby="chat-title">
+    <div class="dialog-heading"><h2 id="chat-title">房间聊天</h2><button class="text-button" data-close="chat-dialog" aria-label="关闭聊天">关闭 ×</button></div>
+    <ol id="chat-messages" class="chat-messages" aria-label="本房间最近80条聊天消息"></ol>
+    <form id="chat-form" class="chat-form"><label class="sr-only" for="chat-input">聊天内容</label><input id="chat-input" maxlength="200" autocomplete="off" placeholder="和同桌聊两句…"><button id="chat-send" class="primary-button" type="submit">发送</button></form>
+    <p id="chat-feedback" role="status"></p>
+  </dialog>
+  <dialog id="revolution-dialog" aria-labelledby="revolution-title">
+    <h2 id="revolution-title">没有分牌，选择革命？</h2><p>你发到的12张手牌没有5、10、K。革命会让整桌比赛回到首局，清除进贡义务，重新洗牌并先给原庄家发牌，再由首局亮2重新定庄。</p>
+    <div class="tool-grid"><button class="secondary-button" data-close="revolution-dialog">继续本局</button><button id="confirm-revolution" class="primary-button">革命重开</button></div>
+  </dialog>
   <dialog id="tools-dialog" aria-labelledby="tools-title">
     <div class="dialog-heading"><p class="eyebrow">牌桌工具</p><button class="text-button" data-close="tools-dialog" aria-label="关闭菜单">关闭 ×</button></div><h2 id="tools-title">桌上见</h2>
     <div class="tool-grid"><button id="rules-open" class="secondary-button">玩法速览</button><button id="events-open" class="secondary-button">牌局动态</button><a class="secondary-button" id="mode-link" href="/friends">四人好友房</a><button id="fullscreen" class="secondary-button">进入全屏</button><button id="auto-menu" class="secondary-button" disabled>托管本局</button><button id="reset" class="secondary-button">重新开桌</button></div>
@@ -97,6 +108,7 @@
     <p>四人一副牌，对家搭档。每人12张，留6张底牌；5计5分，10和K各计10分，全局共100分。</p>
     <ol class="rule-flow"><li><b>发牌与亮牌</b>发牌时先亮有效2者定主花色，首局同时定庄。亮主后立即发完剩余手牌。三张3或三张5可亮三反、五反，只有亮出的三张牌升级为反。</li><li><b>先贡，再拿底</b>先完成进贡还贡，庄家再拿6张底牌。贡最大主牌，还不带分的主牌；已亮出的三反牌不能还贡，无合法还贡牌则全部免贡。</li><li><b>扣底与出牌</b>庄家拿底所得的3、5可以组成反；四张时自行选择亮哪三张。亮反截止于扣牌提交前，确认继续后仍可补亮。庄家扣6张，不能扣任何5、10、K，扣下后向全桌公开。庄家首出，之后每轮赢家领出；有应跟的牌就必须先跟足。</li><li><b>分数决定下局</b>闲家不到40分原庄继续坐；40分起换庄，60分起原庄进贡，80分起双贡；闲家0分也双贡。</li></ol>
     <p class="rule-small">主牌从大到小：方片5 ＞ 五反 ＞ 三反 ＞ 大王 ＞ 小王 ＞ 黑桃Q ＞ 主J ＞ 副J ＞ 主2 ＞ 副2 ＞ 普通主牌。同组三反或五反先出者大；四张中保留未亮的3按普通3使用。</p>
+    <p class="rule-small">革命：每人12张手牌发完后，任意玩家没有5、10、K，可在进贡和拿底前选择革命。比赛回到首局、清除进贡义务，重新洗牌，先给原庄家发牌，再亮2定庄。</p>
     <p class="rule-small">四张同点数可组成真杠；黑桃Q加三张同点数可组成假杠。真杠先跟主、假杠先跟副，不足再补其他牌。四张Q领出要明确选择真杠或假杠。贡牌交换取得的牌不能组成杠或三五反。</p>
     <button id="rules-done" class="primary-button">知道了，回牌桌</button>
   </dialog>

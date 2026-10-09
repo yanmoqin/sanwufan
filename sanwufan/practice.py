@@ -109,6 +109,8 @@ class PracticeRoom:
     def available(self, seat=0):
         g = self.game
         actions = []
+        if g.can_revolution(seat):
+            actions.append("revolution")
         if g.phase == Phase.WAITING and seat not in g.ready_seats:
             actions.append("ready")
         if g.phase == Phase.DEALING and g.context is None and any(c.rank == "2" for c in g.hands[seat]):
@@ -142,6 +144,15 @@ class PracticeRoom:
         if action == "ready":
             g = g.ready(seat)
             text = f"{label}已准备。"
+        elif action == "revolution":
+            original_dealer = g.dealer if g.dealer is not None else g.deal_start_seat
+            g = g.revolution(seat, self._order())
+            self.table_id = secrets.token_hex(12)
+            self.auto = False
+            self.two_seen = {}
+            self.claim_deadline = None
+            self.next_tick = time.monotonic() + DEAL_INTERVAL
+            text = f"{label}没有分牌，选择革命。比赛回到首局，先给{self.names[original_dealer]}发牌，重新亮2定庄。"
         elif action == "call_trump":
             if len(cards) != 1:
                 raise RuleViolation("WRONG_CARD_COUNT", "请选择一张2")
@@ -212,7 +223,7 @@ class PracticeRoom:
                     self._perform(seat, 'reveal', group['choices'][0])
 
     def _deal_card(self):
-        seat = self.game.dealt_count % 4
+        seat = (self.game.deal_start_seat + self.game.dealt_count) % 4
         self._commit(self.game.deal_one())
         card = self.game.hands[seat][-1]
         if self.game.number == 1 and self.game.context is None and card.rank == '2':

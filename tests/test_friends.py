@@ -265,6 +265,37 @@ class FriendHTTPTests(unittest.TestCase):
         self.assertEqual(self.act(losing_player, "ready")[0], 200)
         self.assertEqual(len(room.game.ready_seats), 2)
 
+    def test_chat_is_shared_only_in_room_and_does_not_stale_a_card_action(self):
+        room = self.create_table()
+        before = self.request(0)[2]
+        payload = {'command': 'chat', 'room_code': room.code, 'text': '一起打牌'}
+        self.assertEqual(self.request(1, payload)[0], 200)
+        for p in range(4):
+            _, _, view = self.request(p)
+            self.assertEqual(view['chat_messages'][0]['text'], '一起打牌')
+            self.assertEqual(view['chat_messages'][0]['seat'], 1)
+        self.assertNotIn('chat_messages', self.request(4)[2])
+        self.assertEqual(self.request(payload=payload)[0], 401)
+        self.assertEqual(self.request(4, payload)[0], 400)
+        self.assertEqual(self.act(0, 'ready', before)[0], 200)
+
+    def test_revolution_refreshes_all_clients_and_rejects_replays(self):
+        from tests.test_revolution_chat import scoreless_game
+        room = self.create_table()
+        room.game = scoreless_game()
+        before = self.request(0)[2]
+        status, _, view = self.act(0, 'revolution', before)
+        self.assertEqual(status, 200)
+        self.assertEqual(view['deal_number'], 1)
+        self.assertEqual(view['next_deal_seat'], 3)
+        self.assertNotEqual(view['table_id'], before['table_id'])
+        for p in range(4):
+            fresh = self.request(p)[2]
+            self.assertEqual(fresh['table_id'], view['table_id'])
+            self.assertEqual(fresh['tribute_obligations'], [])
+            self.assertEqual(fresh['hand'], [])
+        self.assertEqual(self.act(0, 'confirm', before)[0], 409)
+
     def test_no_session_foreign_seat_wrong_origin_and_server_commands(self):
         room = self.create_table()
         self.assertEqual(self.request(payload={"action": "ready"})[0], 401)

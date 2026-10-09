@@ -53,7 +53,10 @@ def decode(value):
         return ENUMS[value["enum"]](value["value"])
     if "type" in value:
         cls = TYPES[value["type"]]
-        attrs = value["fields"]
+        attrs = dict(value["fields"])
+        # v1.0 dealt from seat zero and did not store this field.
+        if cls is Game and "deal_start_seat" not in attrs:
+            attrs["deal_start_seat"] = 0
         if set(attrs) != {f.name for f in fields(cls)}:
             raise StorageError("存档字段与程序版本不匹配")
         result = cls(**{k: decode(v) for k, v in attrs.items()})

@@ -15,6 +15,49 @@ dialog{width:calc(100% - 32px);max-width:540px;max-height:calc(100dvh - 32px);ov
 .in-room[data-phase="playing"] .table-center{display:none}
 .interaction-avatar{position:relative}.interaction-avatar::after{content:"";position:absolute;inset:-4px}@media(orientation:landscape) and (max-height:560px){.table-center{top:72%;width:40%}.center-watermark{display:none}}
 .reflection-alternatives{width:100%}.reflection-alternatives summary{cursor:pointer;color:#bed0b3;font-size:11px;padding:9px 0;min-height:36px}.reflection-alternatives .hint-button{margin:0 6px 7px 0}
+/* Preserve each card's visible strip when an adjacent card is selected. */
+.hand{justify-content:safe center;overflow-x:auto;overflow-y:hidden}
+.trump-caller{display:block;font-size:10px;font-weight:400;margin-top:3px;max-width:160px;overflow:hidden;text-overflow:ellipsis}
+.seat-reflections{gap:5px}
+.reflection-badge{display:flex;flex-direction:column;gap:3px;padding:4px;background:#133d35;border:1px solid #e9cd86;color:#f6dda2}
+.reflection-label{font-size:10px!important;line-height:1}
+.reflection-faces{display:flex;gap:3px}
+.reflection-faces .card.mini{width:24px;height:34px;border-radius:3px;overflow:hidden}
+.reflection-faces .card.mini .card-corner{font-size:14px;left:3px;top:3px}
+.reflection-faces .card.mini .card-corner small{font-size:11px;margin-top:2px}
+.reflection-faces .card-center,.reflection-faces .reverse{display:none}
+.reflection-faces .reflection-used{opacity:.32;filter:grayscale(1)}
+.seat-top .seat-reflections{left:calc(100% + 5px);right:auto;top:0;width:auto;flex-wrap:nowrap;flex-direction:column}
+.hand-heading .seat-reflections{max-width:none;flex-wrap:nowrap;flex-direction:row}
+.chat-messages{list-style:none;padding:0;margin:8px 0 16px;height:min(380px,45dvh);overflow:auto;overscroll-behavior:contain}
+.chat-messages li{margin:0 0 12px;max-width:90%}
+.chat-messages li.chat-own{margin-left:auto}
+.chat-heading{display:flex;gap:10px;align-items:center;font-size:11px;color:#c1d6c5;margin-bottom:4px}
+.chat-heading time{color:#8cae9d;font-size:10px}
+.chat-own .chat-heading{justify-content:flex-end}
+.chat-messages .chat-text{margin:0;padding:9px 12px;background:#294f43;border-radius:10px;color:#eef4e9;font-size:13px;line-height:1.6;overflow-wrap:anywhere;white-space:pre-wrap}
+.chat-own .chat-text{background:#4d6350}
+.chat-form{display:flex;gap:8px}.chat-form input{flex:1;min-width:0}.chat-form button{flex:none;padding:10px 15px}
+#chat-feedback{margin:8px 0 0;min-height:20px;color:#f4c58c}
+#chat-unread{font:600 9px "Segoe UI",sans-serif;min-width:16px;padding:3px;background:#bf4f3b;color:#fff;border-radius:10px}
+@media(max-width:600px) and (orientation:portrait),(orientation:landscape) and (max-height:560px){
+  .trump-caller{font-size:8px;max-width:105px}
+  .reflection-badge{padding:3px;gap:2px}.reflection-label{font-size:8px!important}
+  .reflection-faces{gap:2px}.reflection-faces .card.mini{width:18px;height:26px}
+  .reflection-faces .card.mini .card-corner{font-size:11px;left:2px;top:2px}
+  .reflection-faces .card.mini .card-corner small{font-size:9px;margin-top:1px}
+  .seat-top .seat-reflections{left:calc(100% + 4px);right:auto;top:0;width:auto;display:flex;flex-direction:column}
+  .hand-heading .seat-reflections{position:static;display:flex;flex-direction:row;margin:0 0 0 3px}
+  .hand-heading:has(.seat-reflections){flex-wrap:wrap;padding-right:0}
+  .hand-panel:has(.seat-reflections) .action-row{position:static;justify-content:flex-end}
+  .seat-left .seat-reflections,.seat-right .seat-reflections{display:flex;flex-direction:column;align-items:center;flex-wrap:nowrap}
+  .table-toolbar{flex-wrap:wrap}.main-actions{flex-wrap:wrap}.action-row{flex-wrap:wrap}
+  #chat-dialog{padding:16px;max-height:calc(100dvh - 16px)}#chat-dialog h2{font-size:20px;margin:0}
+}
+@media(max-width:400px) and (orientation:portrait){nav .tool-button>span{display:none}.site-header{gap:2px}.tool-button{padding:6px 7px}}
+@media(orientation:landscape) and (max-height:560px){.table:has(.hand-heading .seat-reflections) .playfield{min-height:80px}.hand-panel:has(.seat-reflections){margin-top:0}}
+@media(orientation:landscape) and (max-height:350px),(max-width:600px) and (orientation:portrait) and (max-height:620px){body{overflow:auto}.page{height:auto;min-height:calc(100dvh - 50px)}.game-layout,.table-column{height:auto}.table{height:auto;min-height:calc(100dvh - 56px)}}
+@media(orientation:landscape) and (max-height:350px){.in-room .table-center{display:none}}
 @media(max-width:600px) and (orientation:portrait) and (max-height:620px){.playfield{min-height:110px}.hand .card{height:54px}.hand{row-gap:5px}.action-info p{font-size:10px}.hand-panel{padding-bottom:7px}.table-center{top:82%}.table-center h2{font-size:19px}.table-center .center-kicker,.table-center p{display:none}}
 @media(orientation:landscape) and (max-height:350px){:root{--card-width:45px;--card-height:58px}.playfield{min-height:90px}.hand{min-height:70px}.card-corner{font-size:17px;top:4px;left:4px}.card-corner small{font-size:11px}.card-center{font-size:23px;top:25px}.card-corner.reverse{display:none}.card.joker .card-center{font-size:20px;top:26px}.card.joker .card-corner{font-size:7px;letter-spacing:1px}.special-open{max-width:90px}.card.mini{width:28px;height:38px}.card.mini .card-center{font-size:15px;top:18px}.play-top{left:45%;top:38px}.play-bottom{left:57%;bottom:8px}.seat-top .avatar{width:28px;height:28px}.table-center{top:76%}.center-kicker{display:none}}
 
