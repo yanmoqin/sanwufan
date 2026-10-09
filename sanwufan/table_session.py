@@ -159,7 +159,7 @@ class TableSession:
                 else:
                     report = match_summary(self.match_ledger, self.names, self.match_started, time.time())
                     report['id'] = secrets.token_hex(12)
-                    self.match_reports = (self.match_reports + [report])[-10:]
+                    self.match_reports = (self.match_reports + [report])[-30:]
                     self.game = Game(options=self.game.options)
                     self.table_id = secrets.token_hex(12)
                     self.auto = False

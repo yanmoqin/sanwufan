@@ -32,7 +32,7 @@ class PracticeServer(GameService, ThreadingHTTPServer):
 
 
 class PracticeHandler(BaseHTTPRequestHandler):
-    server_version = "Sanwufan/1.2"
+    server_version = "Sanwufan/1.2.1"
 
     def setup(self):
         super().setup()
