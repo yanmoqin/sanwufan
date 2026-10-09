@@ -9,7 +9,7 @@ from random import SystemRandom
 
 from .models import Card, PlayKind, Reflection, RuleContext, RuleViolation, Suit, deck, unique_cards, validate_seat
 from .rules import declare_reflection, is_trump, strength, validate_bottom, validate_selection
-from .settlement import Settlement, Tribute, settle
+from .settlement import Settlement, Tribute, settle, settle_surrender
 from .trick import Trick, TrickResult
 
 
@@ -67,11 +67,12 @@ class DealResult:
     team_points: tuple[int, int]
     settlement: Settlement
     trick_count: int
+    surrender_by: int | None = None
 
     def to_dict(self) -> dict:
         return {"number": self.number, "dealer": self.dealer,
                 "team_points": list(self.team_points), "trick_count": self.trick_count,
-                "settlement": self.settlement.to_dict()}
+                "settlement": self.settlement.to_dict(), "surrender_by": self.surrender_by}
 
 
 EMPTY_HANDS = ((), (), (), ())
@@ -137,8 +138,26 @@ class Game:
             raise RuleViolation("INVALID_STATE", "累计分数与已收牌分数不一致")
         if any(c.points for c in self.bottom) and self.phase in (Phase.PLAYING, Phase.SETTLED):
             raise RuleViolation("INVALID_STATE", "扣底中不能包含分牌")
-        if self.phase == Phase.SETTLED and (any(self.hands) or sum(self.team_points) != 100):
+        if self.phase == Phase.SETTLED and (not self.result or
+                (self.result.surrender_by is None and (any(self.hands) or sum(self.team_points) != 100))):
             raise RuleViolation("INVALID_STATE", "结束时手牌必须打完且两队合计100分")
+        if self.phase == Phase.SETTLED and self.result.surrender_by is not None:
+            expected = settle_surrender(self.dealer, self.team_points[1 - self.dealer % 2],
+                                        self.result.surrender_by)
+            if self.result.settlement != expected or self.result.team_points != self.team_points:
+                raise RuleViolation("INVALID_STATE", "投降结果与已收分数不一致")
+
+    def surrender(self, initiator: int) -> "Game":
+        """Called only after the room obtains all four authenticated approvals.
+
+        Keep unplayed cards and the incomplete trick for conservation checks;
+        only already captured tricks contribute points or appear in the replay.
+        """
+        self._require(Phase.PLAYING)
+        decision = settle_surrender(self.dealer, self.team_points[1 - self.dealer % 2], initiator)
+        summary = DealResult(self.number, self.dealer, self.team_points, decision,
+                             len(self.tricks), initiator)
+        return self._change(result=summary, phase=Phase.SETTLED)
 
     def ready(self, seat: int, ready: bool = True) -> "Game":
         self._require(Phase.WAITING)

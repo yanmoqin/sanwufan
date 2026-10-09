@@ -9,6 +9,7 @@ from .game import FirstNoTrump, Game, Phase, REFLECTION_PHASES
 from .models import Card, PlayKind, RuleViolation, deck, validate_seat
 from .rules import is_trump, strength, validate_follow
 from .suggestions import reflection_groups, special_hints
+from .table_session import TableSession
 
 
 NAMES = ("你", "阿北", "小岚", "老陈")
@@ -61,7 +62,7 @@ def suggested_cards(game, seat, action):
     return ()
 
 
-class PracticeRoom:
+class PracticeRoom(TableSession):
     """Server-private practice room. All actions and ticks share the same lock."""
 
     def __init__(self, seed=None):
@@ -81,6 +82,7 @@ class PracticeRoom:
         self.social_sequence = 0
         self.social_events = []
         self.emote_last = {}
+        self._init_session()
 
     def _order(self):
         if self.rng is None:
@@ -98,6 +100,7 @@ class PracticeRoom:
         self.game = game
         self.version += 1
         self._log(message)
+        self._session_committed(previous)
         if len(game.tricks) > len(previous.tricks):
             t = game.tricks[-1]
             self._log(f"{self.names[t.winner]}收得{t.points}分，并领出下一轮。")
@@ -133,7 +136,7 @@ class PracticeRoom:
             actions.append("discard")
         if g.phase == Phase.PLAYING and g.trick.next_seat == seat:
             actions.append("play")
-        if g.phase == Phase.SETTLED:
+        if g.phase == Phase.SETTLED and not self.proposal:
             actions.append("next_deal")
         return actions
 
@@ -246,6 +249,9 @@ class PracticeRoom:
 
     def action(self, payload):
         with self.lock:
+            if isinstance(payload, dict) and payload.get('command') == 'table_vote':
+                self.table_vote(0, payload)
+                return self.snapshot()
             if isinstance(payload, dict) and payload.get('command') == 'emote':
                 if set(payload) != {'command', 'target', 'item', 'table_id'}:
                     raise RuleViolation("INVALID_REQUEST", "操作请求格式不正确")
@@ -276,6 +282,7 @@ class PracticeRoom:
                     raise RuleViolation("INVALID_KIND", "此操作不能声明出牌类型")
             if action == "reset":
                 self.game = Game(options=self.game.options)
+                self._reset_session()
                 self.auto = False
                 self.fault = None
                 self.two_seen = {}
@@ -290,6 +297,10 @@ class PracticeRoom:
                 self.version += 1
                 self._log("已托管本局。" if self.auto else "已停止托管，请自行操作。")
             else:
+                if action == 'play':
+                    self._check_play_deadline()
+                if action == 'next_deal' and self.proposal:
+                    raise RuleViolation('VOTE_IN_PROGRESS', '请先完成整场结算投票')
                 self._perform(0, action, cards, kind)
             self.last_active = time.monotonic()
             return self.snapshot()
@@ -298,6 +309,8 @@ class PracticeRoom:
         """Accept at most one autonomous action per tick; test with a virtual clock."""
         with self.lock:
             now = time.monotonic() if now is None else now
+            if self._timeout_turn():
+                return True
             if now < self.next_tick or self.fault or self.game.phase == Phase.SETTLED:
                 return False
             self.next_tick = now + 0.65
@@ -391,4 +404,5 @@ class PracticeRoom:
                 "social_sequence": self.social_sequence,
                 "social_events": [dict(e) for e in self.social_events if time.time() - e['at'] < 8],
             })
+            view.update(self._session_view())
             return view

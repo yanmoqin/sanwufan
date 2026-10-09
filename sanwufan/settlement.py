@@ -46,3 +46,20 @@ def settle(dealer: int, defender_points: int) -> Settlement:
     else:
         tribute = ()
     return Settlement(defender_points, winning_team, next_dealer, tribute)
+
+
+def settle_surrender(dealer: int, defender_points: int, initiator: int) -> Settlement:
+    """Initiator's partnership loses; captured defender points select tribute tier."""
+    validate_seat(initiator)
+    settle(dealer, defender_points)  # Validate the score and dealer.
+    losing = initiator % 2
+    winning = 1 - losing
+    next_dealer = dealer if winning == dealer % 2 else (dealer + 1) % 4
+    if defender_points == 0 or defender_points >= 80:
+        tribute = tuple(Tribute(s, (s + 1) % 4) for s in range(4) if s % 2 == losing)
+    elif defender_points >= 60:
+        giver = dealer if losing == dealer % 2 else initiator
+        tribute = (Tribute(giver, (giver + 1) % 4),)
+    else:
+        tribute = ()
+    return Settlement(defender_points, winning, next_dealer, tribute)

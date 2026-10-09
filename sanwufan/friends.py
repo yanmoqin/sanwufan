@@ -4,12 +4,14 @@ import hashlib
 import random
 import time
 import unicodedata
+from copy import deepcopy
 from threading import RLock
 
 from .game import Game, Phase, REFLECTION_PHASES
 from .models import Card, PlayKind, RuleViolation, validate_seat
 from .practice import DEAL_INTERVAL, PracticeRoom
 from .storage import StorageError
+from .table_session import SESSION_FIELDS
 
 
 class FriendRoom(PracticeRoom):
@@ -41,7 +43,8 @@ class FriendRoom(PracticeRoom):
                     "blocked": self.blocked, "social_sequence": self.social_sequence,
                     "social_events": list(self.social_events), "emote_last": dict(self.emote_last),
                     "chat_sequence": self.chat_sequence, "chat_messages": list(self.chat_messages),
-                    "chat_last": dict(self.chat_last)}
+                    "chat_last": dict(self.chat_last),
+                    **{key: deepcopy(getattr(self, key)) for key in SESSION_FIELDS}}
 
     def restore(self, data):
         with self.lock:
@@ -53,6 +56,11 @@ class FriendRoom(PracticeRoom):
                 self.rng.setstate(data["rng_state"])
             else:
                 self.rng = None
+            if 'match_ledger' not in data:
+                self.match_ledger = [r.to_dict() for r in self.game.history]
+                if self.game.result is not None:
+                    self.match_ledger.append(self.game.result.to_dict())
+            self._sync_turn_clock()
 
     def seat_for(self, token):
         if token not in self.members:
@@ -88,6 +96,7 @@ class FriendRoom(PracticeRoom):
                 raise RuleViolation("MATCH_IN_PROGRESS", "本局进行中，请打完后离房；关闭页面会保留座位")
             # A replacement player starts a fresh match, without inheriting tribute.
             self.game = Game(options=self.game.options)
+            self._reset_session(keep_reports=False)
             self._log(f"{self.names[seat]}{'被房主请离' if removed else '离开了房间'}，重新等待准备。")
             self.members[seat] = None
             self.names[seat] = "空座"
@@ -156,6 +165,7 @@ class FriendRoom(PracticeRoom):
                 if self.game.phase not in (Phase.WAITING, Phase.SETTLED) and not self.fault:
                     raise RuleViolation("MATCH_IN_PROGRESS", "请在本局结束后重新开桌")
                 self.game = Game(options=self.game.options)
+                self._reset_session()
                 self.fault = None
                 self.claim_deadline = None
                 self.two_seen = {}
@@ -179,12 +189,16 @@ class FriendRoom(PracticeRoom):
             else:
                 if action not in self.available(seat):
                     raise RuleViolation("ACTION_UNAVAILABLE", "当前不能进行此操作")
+                if action == 'play':
+                    self._check_play_deadline()
                 self._perform(seat, action, cards, kind)
             return self.snapshot_for(token)
 
     def tick(self, now=None):
         with self.lock:
             now = time.monotonic() if now is None else now
+            if self._timeout_turn():
+                return True
             if self.fault or now < self.next_tick:
                 return False
             if self.recovering:
@@ -453,6 +467,12 @@ class FriendRooms:
                 if payload['room_code'] != room.code:
                     raise RuleViolation('STATE_CHANGED', '房间已变更，请重新发送')
                 room.chat(token, payload['text'])
+                return self._state(token)
+            if command == 'table_vote':
+                if session['room'] not in self.rooms:
+                    raise RuleViolation('NOT_SEATED', '请先加入房间')
+                room = self.rooms[session['room']]
+                room.table_vote(room.seat_for(token), payload)
                 return self._state(token)
             if command in ('kick', 'emote'):
                 expected = ({'command', 'target', 'target_id', 'version', 'table_id'} if command == 'kick' else

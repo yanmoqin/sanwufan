@@ -309,13 +309,52 @@ class FriendHTTPTests(unittest.TestCase):
         room = self.create_table()
         original = self.request(1)[2]
         refresh = self.request(1)[2]
-        self.assertEqual(original, refresh)
+        # A poll samples server time for the turn clock; the seat/game stay identical.
+        self.assertEqual({k: v for k, v in original.items() if k != 'server_time'},
+                         {k: v for k, v in refresh.items() if k != 'server_time'})
         connection = http.client.HTTPConnection(*self.server.server_address)
         connection.request("GET", "/api/state", headers={"Cookie": self.cookies[1]})
         result = json.loads(connection.getresponse().read())
         connection.close()
         self.assertNotEqual(result["table_id"], room.table_id)
         self.assertEqual(self.request(1)[2]["player_seat"], 1)
+
+    def test_four_http_clients_vote_then_settle_match_without_exposing_hands(self):
+        from tests.test_table_session import playing_game
+        room = self.create_table()
+        room._commit(playing_game())
+        def vote(player, kind, choice):
+            return self.request(player, dict(command='table_vote', table_id=room.table_id,
+                kind=kind, choice=choice, proposal_id=room.proposal['id'] if room.proposal else None))
+        self.assertEqual(vote(2, 'surrender', 'start')[0], 200)
+        self.assertEqual(vote(4, 'surrender', 'agree')[0], 400)
+        for p in [0, 1, 3]:
+            self.assertEqual(vote(p, 'surrender', 'agree')[0], 200)
+        self.assertEqual(room.game.phase, Phase.SETTLED)
+        self.assertEqual(vote(3, 'match_end', 'start')[0], 200)
+        for p in [0, 1, 2]:
+            self.assertEqual(vote(p, 'match_end', 'agree')[0], 200)
+        for p in range(4):
+            status, _, view = self.request(p)
+            self.assertEqual(status, 200)
+            self.assertEqual(view['phase'], 'waiting')
+            self.assertEqual(view['match_reports'][0]['total_deals'], 1)
+            self.assertNotIn('hands', json.dumps(view['match_reports']))
+
+    def test_expired_http_play_rejected_and_server_tick_moves_turn(self):
+        from tests.test_table_session import playing_game
+        from unittest.mock import patch
+        room = self.create_table()
+        room._commit(playing_game())
+        _, _, before = self.request(room.game.dealer)
+        with patch('sanwufan.table_session.time.time', return_value=room.turn_deadline + .1):
+            status, _, result = self.act(room.game.dealer, 'play', before, cards=before['hint']['cards'])
+            self.assertEqual(status, 400)
+            self.assertEqual(result['error']['code'], 'TURN_EXPIRED')
+            room.tick()
+        _, _, after = self.request(room.game.dealer)
+        self.assertEqual(len(after['current_plays']), 1)
+        self.assertNotEqual(after['next_seat'], before['next_seat'])
 
     def test_cannot_play_another_players_card_or_play_out_of_turn(self):
         from tests.test_game import declarations_done, prepared

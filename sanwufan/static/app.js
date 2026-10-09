@@ -14,6 +14,7 @@ let requestEpoch = 0;
 let specialKey = '', socialCursor = 0, playerTarget = null;
 LABELS.revolution = '革命重开';
 let historyKey = '', chatKey = '', chatRoom = '', chatCursor = 0, chatUnread = 0, chatSending = false;
+let clockReceived = 0, voteStartKind = null, reportCursor = null, matchKey = '';
 const EMOTES = {egg:'🥚',tomato:'🍅',flower:'🌸',clap:'👏'};
 const EMOTE_LABELS = {egg:'扔鸡蛋',tomato:'扔西红柿',flower:'送花',clap:'鼓掌'};
 try {$('mute-emotes').checked=localStorage.getItem('sanwufan-mute-emotes')==='1';} catch {}
@@ -88,13 +89,13 @@ function accept(next) {
   if(state?.room_code===next.room_code && (next.chat_sequence||0)<(state.chat_sequence||0))next={...next,chat_sequence:state.chat_sequence,chat_messages:state.chat_messages};
   const changed = !sameTable || state.version !== next.version;
   if(!sameTable || state.player_seat!==next.player_seat) {selected.clear();handKey=eventsKey=playKey=actionKey=specialKey='';$('kind').value='';socialCursor=next.social_sequence||0;}
-  state = next; connection(true);document.body.classList.add('in-room');document.body.dataset.phase=state.phase;
+  state = next; clockReceived=performance.now(); connection(true);document.body.classList.add('in-room');document.body.dataset.phase=state.phase;
   if (changed || friends) {
     selected = new Set([...selected].filter(id => state.hand.includes(id)));
     if (state.auto) selected.clear();
     render();
   }
-  renderSocial();renderChat();
+  renderSocial();renderChat();renderSession();
 }
 async function poll() {
   if (polling) return;
@@ -163,7 +164,7 @@ function renderSeats() {
     if (state.phase === 'settled') status = '本局结束';
     if(friends) status=p.occupied?`${status} · ${p.online?'在线':'离线，保留座位'}`:'等待朋友';
     const meta = element('div','seat-meta',status);
-    if (active) meta.prepend(element('span','turn-pip'));
+    if (active) {meta.prepend(element('span','turn-pip'));const timer=element('strong','turn-countdown');timer.dataset.turnSeat=p.seat;meta.append(timer);}
     if (p.seat !== me() && state.hand_counts[p.seat] > 0 && state.phase !== 'declaring') meta.append(element('span','cardback'));
     const interact=(!friends||p.occupied)&&p.seat!==me();
     const avatar=element(interact?'button':'div',`avatar${interact?' interaction-avatar':''}`,Array.from(p.name)[0]||'?');
@@ -206,7 +207,8 @@ function renderCenter() {
     title='开打';subtitle=`庄家${name(state.dealer)}先出`;kicker='第一轮';
   } else if(state.phase === 'settled') {
     center.classList.add('center-result'); const result=state.result.settlement;
-    center.append(element('div','center-kicker',`第${state.deal_number}局 · 已结束`),element('h2','',result.winning_team===ourTeam()?'我们赢了':'对方获胜'),element('div','result-score',`${state.team_points[ourTeam()]} : ${state.team_points[1-ourTeam()]}`),element('p','',`闲家${result.defender_points}分 · 下局${name(result.next_dealer)}坐庄`),element('p','',`下局${result.tribute_obligations.length?'需进贡'+result.tribute_obligations.length+'人':'无进贡义务'}`));return;
+    center.append(element('div','center-kicker',`第${state.deal_number}局 · ${state.result.surrender_by!==null?'投降结束':'已结束'}`),element('h2','',result.winning_team===ourTeam()?'我们赢了':'对方获胜'),element('div','result-score',`${state.team_points[ourTeam()]} : ${state.team_points[1-ourTeam()]}`),element('p','',`闲家${result.defender_points}分 · 下局${name(result.next_dealer)}坐庄`),element('p','',`下局${result.tribute_obligations.length?'需进贡'+result.tribute_obligations.length+'人':'无进贡义务'}`));
+    const finish=element('button','secondary-button','整场结算');finish.disabled=busy||Boolean(state.proposal);finish.addEventListener('click',()=>startVoteDialog('match_end'));center.append(finish);return;
   } else if(state.phase === 'dealing') { title='发牌中';subtitle=`手牌已发${state.dealt_count} / 48张`;kicker=state.called_two?`${SUIT_NAMES[state.trump_suit]}为主`:'拿到2，可抢先亮出'; }
   else if(state.phase === 'declaring') {title='亮三五反';subtitle=`${state.confirmed_seats.length} / 4人已确认`;kicker='亮反后，再进贡';}
   else if(state.phase === 'tribute_give' || state.phase === 'tribute_return') {title=PHASES[state.phase];subtitle='选贡牌，完成双方交换';kicker='先贡后拿底';}
@@ -270,6 +272,7 @@ function renderSelection() {
   $('reset').disabled=busy || (friends&&!state.fault&&!['waiting','settled'].includes(state.phase));
   renderSpecialHints();
   if($('player-dialog').open)updatePlayerDialog();
+  updateSessionButtons();
 }
 function renderActions() {
   let actions=[...state.available_actions];
@@ -336,7 +339,7 @@ async function roomCommand(command, extra={}) {
     if(response.ok){accept(result);if(command!=='emote')feedback('');}
     else {if(result.state)accept(result.state);$('lobby-feedback').textContent=result.error?.message||'操作失败';if(state)feedback(result.error?.message||'操作失败');}
   } catch { $('lobby-feedback').textContent='连接中断，请恢复后查看当前房间。';connection(false); }
-  finally {busy=false;$('create-room').disabled=$('join-room').disabled=$('recover-seat').disabled=false;if(state){$('leave-room').disabled=!['waiting','settled'].includes(state.phase);renderSelection();}}
+  finally {busy=false;$('create-room').disabled=$('join-room').disabled=$('recover-seat').disabled=false;if(state){$('leave-room').disabled=!['waiting','settled'].includes(state.phase);renderSelection();renderSession();}}
 }
 function renderChat(){
   if(!friends||!state)return;
@@ -514,5 +517,67 @@ $('fullscreen').addEventListener('click',async()=>{
   $('tools-dialog').close();
   try{if(document.fullscreenElement)await document.exitFullscreen();else if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();else feedback('这个浏览器暂不支持全屏，可以直接在当前页面打牌。',true);}catch{feedback('未进入全屏，可以继续在当前页面打牌。',true);}
 });
+function updateTurnClock(){
+  const active=state?.phase==='playing'&&state.turn_deadline!==null;
+  const own=active&&state.next_seat===me();$('turn-alert').hidden=!own;
+  if(!active){document.body.classList.remove('own-turn');return;}
+  const seconds=Math.max(0,Math.ceil(state.turn_deadline-state.server_time-(performance.now()-clockReceived)/1000));
+  $('turn-seconds').textContent=seconds?`${seconds}s`:'正在自动出牌';
+  $('turn-alert').classList.toggle('urgent',seconds<=5);document.body.classList.toggle('own-turn',own);
+  for(const badge of document.querySelectorAll('[data-turn-seat]')){badge.textContent=`${seconds}s`;badge.classList.toggle('urgent',seconds<=5);}
+}
+function updateSessionButtons(){
+  const full=state&&(!friends||state.players.every(p=>p.occupied));
+  $('surrender-start').disabled=busy||!full||Boolean(state?.fault)||Boolean(state?.proposal)||state?.phase!=='playing';
+  $('match-end-start').disabled=busy||!full||Boolean(state?.fault)||Boolean(state?.proposal)||state?.phase!=='settled';
+  $('match-open').disabled=!state;
+  for(const id of ['vote-agree','vote-reject','vote-cancel','vote-start-confirm'])$(id).disabled=busy;
+}
+function renderSession(){
+  updateTurnClock();updateSessionButtons();if(!state)return;
+  const p=state.proposal;$('vote-banner').hidden=!p;
+  if(p){
+    $('vote-title').textContent=`${name(p.initiator)}发起${p.kind==='surrender'?'投降':'整场结算'}`;
+    $('vote-progress').textContent=`${p.approved.length}/4 已同意`;
+    $('vote-detail').textContent=state.players.map(player=>`${player.name}${p.approved.includes(player.seat)?' ✓':' · 等待'}`).join('　');
+    $('vote-agree').hidden=p.approved.includes(me());$('vote-reject').hidden=p.initiator===me();$('vote-cancel').hidden=p.initiator!==me();
+  }
+  if($('vote-start-dialog').open&&((voteStartKind==='surrender'&&state.phase!=='playing')||(voteStartKind==='match_end'&&state.phase!=='settled')||p))$('vote-start-dialog').close();
+  const latest=state.match_reports?.at(-1)?.id||null;
+  if(latest&&latest!==reportCursor){reportCursor=latest;if(state.phase==='waiting'){renderMatch(latest);showDialog('match-dialog');}}
+  if($('match-dialog').open)renderMatch($('match-picker').value);
+}
+function startVoteDialog(kind){
+  if(!state||state.proposal||busy)return;voteStartKind=kind;
+  $('vote-start-title').textContent=kind==='surrender'?'发起投降':'整场结算';
+  $('vote-start-detail').textContent=kind==='surrender'?'四家均同意后，你所在的队判负；以通过时闲家已收分数决定进贡，未完成的一轮不计分。投票期间继续出牌，30秒计时照常。':'四家均同意后，保存这场的输赢、坐庄与连庄战绩，然后清除进贡义务，回到首局重新准备。任何一家拒绝即可继续下一局。';
+  $('vote-practice-tip').hidden=friends;showDialog('vote-start-dialog');
+}
+function castVote(choice,kind=state?.proposal?.kind,id=state?.proposal?.id){
+  if(!state||busy)return;
+  roomCommand('table_vote',{table_id:state.table_id,kind,choice,proposal_id:id??null});
+}
+function renderMatch(preferred='current'){
+  if(!state)return;
+  const options=[{id:'current',label:'当前场 · 进行中',report:state.match_stats},...(state.match_reports||[]).slice().reverse().map((r,i)=>({id:r.id,label:`已结算第${state.match_reports.length-i}场 · ${r.total_deals}局`,report:r}))];
+  const chosen=options.find(o=>o.id===preferred)||options[0];
+  const key=JSON.stringify([chosen,options.map(o=>[o.id,o.label])]);if(matchKey===key)return;matchKey=key;
+  $('match-picker').replaceChildren(...options.map(o=>{const node=element('option','',o.label);node.value=o.id;return node;}));$('match-picker').value=chosen.id;
+  const report=chosen.report,content=$('match-content');content.replaceChildren();
+  content.append(element('p','match-total',`${report.total_deals} 局已结束 · ${report.surrender_deals} 局投降${report.ended?' · 已完成整场结算':''}`));
+  const teams=element('div','match-teams');
+  for(const team of report.teams){const box=element('section');box.append(element('small','',report.players.filter(p=>p.seat%2===team.team).map(p=>p.name).join(' / ')),element('strong','',`${team.wins}胜 ${team.losses}负`),element('span','',`累计收分 ${team.points}`));teams.append(box);}content.append(teams);
+  const table=element('table','match-table'),heading=element('tr');for(const label of ['玩家','胜 / 负','坐庄','留庄','最长连庄'])heading.append(element('th','',label));const head=element('thead');head.append(heading);table.append(head);
+  const body=element('tbody');for(const p of report.players){const row=element('tr');for(const value of [p.name,`${p.wins} / ${p.losses}`,p.dealer_deals,p.retained_deals,p.longest_streak])row.append(element('td','',value));body.append(row);}table.append(body);content.append(table);
+  const details=element('details','match-deals');details.append(element('summary','',`逐局结果（${report.total_deals}局）`));const list=element('ol');
+  for(const [i,r] of report.deals.entries()){const winners=report.players.filter(p=>p.seat%2===r.settlement.winning_team).map(p=>p.name).join(' / ');list.append(element('li','',`${i+1}. ${winners}胜 · 庄家${report.players[r.dealer].name} · 闲家${r.settlement.defender_points}分${r.surrender_by!==null?' · 投降':''}`));}details.append(list);content.append(details);
+}
+$('surrender-start').addEventListener('click',()=>startVoteDialog('surrender'));
+$('match-end-start').addEventListener('click',()=>startVoteDialog('match_end'));
+$('vote-start-confirm').addEventListener('click',()=>{$('vote-start-dialog').close();castVote('start',voteStartKind,null);});
+for(const choice of ['agree','reject','cancel'])$(`vote-${choice}`).addEventListener('click',()=>castVote(choice));
+$('match-open').addEventListener('click',()=>{renderMatch();showDialog('match-dialog');});
+$('match-picker').addEventListener('change',()=>renderMatch($('match-picker').value));
+setInterval(updateTurnClock,200);
 document.addEventListener('fullscreenchange',()=>{$('fullscreen').textContent=document.fullscreenElement?'退出全屏':'进入全屏';fitHand();});
 poll();

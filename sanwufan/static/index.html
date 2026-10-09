@@ -53,6 +53,8 @@
             <div id="table-center" class="table-center"></div>
           </div>
           <section class="hand-panel" aria-label="你的手牌与操作">
+            <div id="turn-alert" class="turn-alert" hidden role="status"><strong>轮到你出牌</strong><span id="turn-seconds"></span><small>超时会随机出合法牌</small></div>
+            <section id="vote-banner" class="vote-banner" hidden aria-label="四家一致投票"><div><strong id="vote-title"></strong><span id="vote-progress"></span></div><p id="vote-detail"></p><div class="vote-controls"><button id="vote-agree" class="primary-button">同意</button><button id="vote-reject" class="secondary-button">拒绝</button><button id="vote-cancel" class="text-button">撤回</button></div></section>
             <div class="hand-heading"><article class="seat seat-bottom" id="seat-0" aria-label="你的座位"></article><h2>手牌 <span id="hand-count">0张</span></h2><button id="special-open" class="special-open" disabled>特殊牌</button><button id="auto" class="secondary-button" disabled>托管本局</button></div>
             <div class="action-info"><p id="instruction" aria-live="polite">连接牌桌后，准备开始。</p><span id="selection-count">未选牌</span></div>
             <div class="action-row">
@@ -67,6 +69,8 @@
     </div>
     <footer>四人 · 一副牌 · 共100分 <span>单人练习</span></footer>
   </main>
+  <dialog id="vote-start-dialog" aria-labelledby="vote-start-title"><div class="dialog-heading"><h2 id="vote-start-title"></h2><button class="text-button" data-close="vote-start-dialog">关闭 ×</button></div><p id="vote-start-detail"></p><p id="vote-practice-tip" hidden>单人练习中，三位自动玩家会直接同意。</p><button id="vote-start-confirm" class="primary-button">发起投票（我同意）</button></dialog>
+  <dialog id="match-dialog" aria-labelledby="match-title"><div class="dialog-heading"><h2 id="match-title">整场战绩</h2><button class="text-button" data-close="match-dialog">关闭 ×</button></div><label class="match-picker" for="match-picker">查看<select id="match-picker"></select></label><div id="match-content"></div><p class="rule-small">留庄局数：坐庄获胜并继续坐庄的局数。最长连庄：同一玩家连续坐庄获胜的最高次数。投降局也计入输赢；革命重发的本局不计入，已完成战绩保留。完整结算保存最近10场。</p></dialog>
   <dialog id="chat-dialog" aria-labelledby="chat-title">
     <div class="dialog-heading"><h2 id="chat-title">房间聊天</h2><button class="text-button" data-close="chat-dialog" aria-label="关闭聊天">关闭 ×</button></div>
     <ol id="chat-messages" class="chat-messages" aria-label="本房间最近80条聊天消息"></ol>
@@ -80,7 +84,8 @@
   <dialog id="tools-dialog" aria-labelledby="tools-title">
     <div class="dialog-heading"><p class="eyebrow">牌桌工具</p><button class="text-button" data-close="tools-dialog" aria-label="关闭菜单">关闭 ×</button></div><h2 id="tools-title">桌上见</h2>
     <div class="tool-grid"><button id="rules-open" class="secondary-button">玩法速览</button><button id="events-open" class="secondary-button">牌局动态</button><a class="secondary-button" id="mode-link" href="/friends">四人好友房</a><button id="fullscreen" class="secondary-button">进入全屏</button><button id="auto-menu" class="secondary-button" disabled>托管本局</button><button id="reset" class="secondary-button">重新开桌</button></div>
-    <p>点牌选中，再点“出牌”。金色边框表示已选牌；牌面右上角标注主牌、反牌和贡牌。</p><p>手机横屏能看到更宽的牌桌；竖屏也可以直接打牌。</p>
+    <div class="tool-grid"><button id="surrender-start" class="secondary-button" disabled>发起投降</button><button id="match-end-start" class="secondary-button" disabled>整场结算</button><button id="match-open" class="secondary-button" disabled>查看战绩</button></div>
+    <p>每次出牌限30秒，超时会随机出合法牌。投降或整场结算须四家一致同意；投票期间继续计时、出牌。</p><p>点牌选中，再点“出牌”。金色边框表示已选牌；牌面右上角标注主牌、反牌和贡牌。</p><p>手机横屏能看到更宽的牌桌；竖屏也可以直接打牌。</p>
   </dialog>
   <dialog id="room-dialog" aria-labelledby="room-dialog-title">
     <div class="dialog-heading"><p class="eyebrow">和朋友一起</p><button class="text-button" data-close="room-dialog" aria-label="关闭房间信息">关闭 ×</button></div><h2 id="room-dialog-title">房间与邀请</h2>
@@ -109,6 +114,7 @@
     <ol class="rule-flow"><li><b>发牌与亮牌</b>发牌时先亮有效2者定主花色，首局同时定庄。亮主后立即发完剩余手牌。三张3或三张5可亮三反、五反，只有亮出的三张牌升级为反。</li><li><b>先贡，再拿底</b>先完成进贡还贡，庄家再拿6张底牌。贡最大主牌，还不带分的主牌；已亮出的三反牌不能还贡，无合法还贡牌则全部免贡。</li><li><b>扣底与出牌</b>庄家拿底所得的3、5可以组成反；四张时自行选择亮哪三张。亮反截止于扣牌提交前，确认继续后仍可补亮。庄家扣6张，不能扣任何5、10、K，扣下后向全桌公开。庄家首出，之后每轮赢家领出；有应跟的牌就必须先跟足。</li><li><b>分数决定下局</b>闲家不到40分原庄继续坐；40分起换庄，60分起原庄进贡，80分起双贡；闲家0分也双贡。</li></ol>
     <p class="rule-small">主牌从大到小：方片5 ＞ 五反 ＞ 三反 ＞ 大王 ＞ 小王 ＞ 黑桃Q ＞ 主J ＞ 副J ＞ 主2 ＞ 副2 ＞ 普通主牌。同组三反或五反先出者大；四张中保留未亮的3按普通3使用。</p>
     <p class="rule-small">革命：每人12张手牌发完后，任意玩家没有5、10、K，可在进贡和拿底前选择革命。比赛回到首局、清除进贡义务，重新洗牌，先给原庄家发牌，再亮2定庄。</p>
+    <p class="rule-small">线上牌桌每次出牌限30秒，超时随机出合法牌。出牌期间任何人可发起投降，四家同意后，发起者所在队判负；按同意时闲家已收分数定贡，0或80分起双贡、60至75分单贡，其他无贡，未完成的轮次不计分。单贡由输方庄家（输方为闲家时由发起者）给下家。一局结束后可四家同意整场结算，保存战绩并从首局重新准备。</p>
     <p class="rule-small">四张同点数可组成真杠；黑桃Q加三张同点数可组成假杠。真杠先跟主、假杠先跟副，不足再补其他牌。四张Q领出要明确选择真杠或假杠。贡牌交换取得的牌不能组成杠或三五反。</p>
     <button id="rules-done" class="primary-button">知道了，回牌桌</button>
   </dialog>
