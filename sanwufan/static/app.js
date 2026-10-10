@@ -86,7 +86,7 @@ function accept(next) {
   }
   const sameTable=state && state.table_id===next.table_id;
   if (sameTable && next.version < state.version) return;
-  if(state?.room_code===next.room_code && (next.chat_sequence||0)<(state.chat_sequence||0))next={...next,chat_sequence:state.chat_sequence,chat_messages:state.chat_messages};
+  if(state && state.room_code===next.room_code && (next.chat_sequence||0)<(state.chat_sequence||0))next={...next,chat_sequence:state.chat_sequence,chat_messages:state.chat_messages};
   const changed = !sameTable || state.version !== next.version;
   if(!sameTable || state.player_seat!==next.player_seat) {selected.clear();handKey=eventsKey=playKey=actionKey=specialKey='';$('kind').value='';socialCursor=next.social_sequence||0;}
   state = next; clockReceived=performance.now(); connection(true);document.body.classList.add('in-room');document.body.dataset.phase=state.phase;
